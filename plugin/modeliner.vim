@@ -1,11 +1,11 @@
 " Modeliner
 "
-" Version: 0.3.0
+" Version: 0.3.1-junkblocker
 " Description:
 "
-"   Generates a modeline from current settings. 
+"   Generates a modeline from current settings.
 "
-" Last Change: 27-Jun-2008.
+" Last Change: Nov 27 2025 09:08 AM PST-Jun-2008.
 " Maintainer: Shuhei Kubota <chimachima@gmail.com>
 "
 " Usage:
@@ -51,51 +51,50 @@ let s:Modeline_EXTRACT_OPTPATTERN2 = '\v(.+):(.*)' " very magic
 
 
 function! s:Modeliner_execute()
-    let options = []
-
     " find existing modeline, and determine the insert position
-    let info = s:SearchExistingModeline()
+    let l:info = s:SearchExistingModeline()
 
     " parse g:Modeliner_format and join options with them
-    let extractedOptStr = g:Modeliner_format . ' ' . info.optStr
-    let extractedOptStr = substitute(extractedOptStr, '[ ,:]\+', ' ', 'g')
-    let extractedOptStr = substitute(extractedOptStr, '=\S*', '=', 'g')
-    let extractedOptStr = substitute(extractedOptStr, 'no\(.\+\)', '\1', 'g')
-    let opts = sort(split(extractedOptStr))
-    "echom 'opt(list): ' . join(opts, ', ')
+    let l:extractedOptStr = g:Modeliner_format . ' ' . l:info.optStr
+    let l:extractedOptStr = substitute(l:extractedOptStr, '[ ,:]\+', ' ', 'g')
+    let l:extractedOptStr = substitute(l:extractedOptStr, '=\S*', '=', 'g')
+    let l:extractedOptStr = substitute(l:extractedOptStr, 'no\(.\+\)', '\1', 'g')
+    let l:opts = sort(split(l:extractedOptStr))
+    "echom 'opt(list): ' . join(l:opts, ', ')
 
-    let optStr = ''
-    let prevO = ''
-    for o in opts
-        if o == prevO | continue | endif
-        let prevO = o
+    let l:optStr = ''
+    let l:prevO = ''
+    for o in l:opts
+        if o == l:prevO | continue | endif
+        let l:prevO = o
 
         if stridx(o, '=') != -1
             " let optExpr = 'ts=' . &ts
-            execute 'let optExpr = "' . o . '" . &' . strpart(o, 0, strlen(o) - 1)
+            execute 'let l:optExpr = "' . o . '" . &' . strpart(o, 0, strlen(o) - 1)
         else
             " let optExpr = (&et ? '' : 'no') . 'et'
-            execute 'let optExpr = (&' . o . '? "" : "no") . "' . o . '"'
+            execute 'let l:optExpr = (&' . o . '? "" : "no") . "' . o . '"'
         endif
 
-        let optStr = optStr . ' ' . optExpr
+        let l:optStr = l:optStr . ' ' . l:optExpr
     endfor
 
-    if info.lineNum == 0
-        let modeline = s:Commentify(optStr)
+    if l:info.lineNum == 0
+        let l:modeline = s:Commentify(l:optStr)
     else
-        let modeline = info.firstText . ' vim: set' . optStr . ' :' . info.lastText
+        let l:modeline = l:info.firstText . ' vim: set' . l:optStr . ' :' . l:info.lastText
     endif
+    let l:modeline = trim(l:modeline)
 
 
-    " insert new modeline 
-    if info.lineNum != 0
+    " insert new modeline
+    if l:info.lineNum != 0
         "modeline FOUND -> replace the modeline
 
         "show the existing modeline
-        let orgLine = line('.')
-        let orgCol  = col('.')
-        call cursor(info.lineNum, 1)
+        let l:orgLine = line('.')
+        let l:orgCol  = col('.')
+        call cursor(l:info.lineNum, 1)
         normal V
         redraw
 
@@ -103,10 +102,10 @@ function! s:Modeliner_execute()
         "if confirm('Are you sure to overwrite this existing modeline?', "&Yes\n&No", 1) == 1
         echo 'Are you sure to overwrite this existing modeline? [y/N]'
         if char2nr(tolower(nr2char(getchar()))) == char2nr('y')
-            call setline(info.lineNum, modeline)
+            call setline(l:info.lineNum, l:modeline)
 
             "show the modeline being changed
-            if (info.lineNum != line('.')) && (info.lineNum != line('.') + 1)
+            if (l:info.lineNum != line('.')) && (l:info.lineNum != line('.') + 1)
                 redraw
                 sleep 1
             endif
@@ -115,112 +114,117 @@ function! s:Modeliner_execute()
         "back to the previous position
         echo
         execute "normal \<ESC>"
-        call cursor(orgLine, orgCol)
+        call cursor(l:orgLine, l:orgCol)
     else
         "modeline NOT found -> append new modeline
-        call append('.', modeline)
+        call append('.', l:modeline)
     endif
 
 endfunction
 
 
 function! s:Commentify(s)
+    let l:commentstring = &commentstring
+    if len(l:commentstring) == 0
+        let l:commentstring = '%s'
+    endif
     if exists('g:NERDMapleader') " NERDCommenter
-        let result = b:left . ' vim: set' . a:s . ' : ' . b:right
+        let l:result = b:left . ' vim: set' . a:s . ' : ' . b:right
     else
-        let result = substitute(&commentstring, '%s', ' vim: set' . a:s . ' : ', '')
+        let l:result = substitute(l:commentstring, '%s', ' vim: set' . a:s . ' : ', '')
     endif
 
-    return result
+    return l:result
 endfunction
 
 
 function! s:SearchExistingModeline()
-    let info = {'lineNum':0, 'text':'', 'firstText':'', 'lastText':'', 'optStr':''}
+    let l:info = {'lineNum':0, 'text':'', 'firstText':'', 'lastText':'', 'optStr':''}
 
-    let candidates = []
+    let l:candidates = []
 
     " cursor position?
-    call add(candidates, line('.'))
+    call add(l:candidates, line('.'))
     " user may position the cursor to previous line...
-    call add(candidates, line('.') + 1)
-    let cnt = 0
-    while cnt < &modelines
+    call add(l:candidates, line('.') + 1)
+    let l:cnt = 0
+    while l:cnt < &modelines
     " header?
-        call add(candidates, cnt + 1)
+        call add(l:candidates, l:cnt + 1)
     " footer?
-        call add(candidates, line('$') - cnt)
-        let cnt = cnt + 1
+        call add(l:candidates, line('$') - l:cnt)
+        let l:cnt = l:cnt + 1
     endwhile
 
     " search
-    for i in candidates
-        let lineNum = i
-        let text = getline(lineNum)
+    for i in l:candidates
+        let l:lineNum = i
+        let l:text = getline(l:lineNum)
 
-        if match(text, s:Modeline_SEARCH_PATTERN) != -1
-            let info.lineNum = lineNum
-            let info.text = text
+        if match(l:text, s:Modeline_SEARCH_PATTERN) != -1
+            let l:info.lineNum = l:lineNum
+            let l:info.text = l:text
             break
         endif
     endfor
 
     " extract texts
-    if info.lineNum != 0
-        "echom 'modeline: ' info.lineNum . ' ' . info.text
+    if l:info.lineNum != 0
+        "echom 'modeline: ' l:info.lineNum . ' ' . l:info.text
 
-        let info.firstText = substitute(info.text, s:Modeline_EXTRACT_PATTERN, '\1', '')
+        let l:info.firstText = substitute(l:info.text, s:Modeline_EXTRACT_PATTERN, '\1', '')
+        let l:info.firstText = substitute(l:info.firstText, '\s$', '', '')
 
-        let isSecondForm = (strlen(substitute(info.text, s:Modeline_EXTRACT_PATTERN, '\3', '')) != 0)
-        "echom 'form : ' . string(isSecondForm + 1)
-        if isSecondForm == 0
-            let info.lastText = ''
-            let info.optStr = substitute(info.text, s:Modeline_EXTRACT_PATTERN, '\4', '')
+        let l:isSecondForm = (strlen(substitute(l:info.text, s:Modeline_EXTRACT_PATTERN, '\3', '')) != 0)
+        "echom 'form : ' . string(l:isSecondForm + 1)
+        if l:isSecondForm == 0
+            let l:info.lastText = ''
+            let l:info.optStr = substitute(l:info.text, s:Modeline_EXTRACT_PATTERN, '\4', '')
         else
-            let info.lastText = substitute(
-                            \ substitute(info.text, s:Modeline_EXTRACT_PATTERN, '\4', ''),
+            let l:info.lastText = substitute(
+                            \ substitute(l:info.text, s:Modeline_EXTRACT_PATTERN, '\4', ''),
                             \ s:Modeline_EXTRACT_OPTPATTERN2,
                             \ '\2',
                             \ '')
-            let info.optStr = substitute(
-                                \ substitute(info.text, s:Modeline_EXTRACT_PATTERN, '\4', ''),
+            let l:info.optStr = substitute(
+                                \ substitute(l:info.text, s:Modeline_EXTRACT_PATTERN, '\4', ''),
                                 \ s:Modeline_EXTRACT_OPTPATTERN2,
                                 \ '\1',
                                 \ '')
         endif
     endif
 
-    "echom 'firstText: ' . info.firstText
-    "echom 'lastText: ' . info.lastText
-    "echom 'optStr: ' . info.optStr
+    "echom 'firstText: ' . l:info.firstText
+    "echom 'lastText: ' . l:info.lastText
+    "echom 'optStr: ' . l:info.optStr
 
-    return info
+    return l:info
 endfunction
 
 
 function! s:ExtractOptionStringFromModeline(text)
-    let info = {}
+    let l:info = {}
 
-    let info.firstText = substitute(a:text, s:Modeline_EXTRACT_PATTERN, '\1', '')
+    let l:info.firstText = substitute(a:text, s:Modeline_EXTRACT_PATTERN, '\1', '')
 
-    let isSecondForm = (strlen(substitute(a:text, s:Modeline_EXTRACT_PATTERN, '\3', '') != 0)
-    if isSecondForm == 0
-        let info.lastText = ''
-        let info.optStr = substitute(a:text, s:Modeline_EXTRACT_PATTERN, '\2', '')
+    let l:isSecondForm = (strlen(substitute(a:text, s:Modeline_EXTRACT_PATTERN, '\3', '') != 0)
+    if l:isSecondForm == 0
+        let l:info.lastText = ''
+        let l:info.optStr = substitute(a:text, s:Modeline_EXTRACT_PATTERN, '\2', '')
     else
-        let info.lastText = substitute(
+        let l:info.lastText = substitute(
                         \ substitute(a:text, s:Modeline_EXTRACT_PATTERN, '\4', ''),
                         \ s:Modeline_EXTRACT_OPTPATTERN2,
                         \ '\2',
                         \ '')
-        let info.optStr = substitute(
+        let l:info.optStr = substitute(
                             \ substitute(a:text, s:Modeline_EXTRACT_PATTERN, '\4', ''),
                             \ s:Modeline_EXTRACT_OPTPATTERN2,
                             \ '\1',
                             \ '')
     endif
 
-    return info
+    return l:info
 endfunction
 
-" vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=4 : 
+" vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=4 :
